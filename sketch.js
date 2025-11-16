@@ -1,12 +1,12 @@
 // ======================================================
 // Pacita Abad 'Wheels of Fortune' — ANIMATED (Perlin noise + randomness)
-// Modules: PaletteSystem / DotSystem / WheelSystem / LayoutSystem
+// - Wheels scale and rotate slowly based on Perlin noise.
+// - Background dots drift slightly based on Perlin noise.
+// - Whole scene scrolls slowly to the left; a second copy
+//   is drawn to the right to create an endless loop.
 // Controls: R = regenerate (new random seed)
 //           Shift+R = regenerate (same seed)
 //           S = save image
-// Animation:
-// - Each wheel has a slow Perlin-noise-driven scale and rotation.
-// - Per-wheel animation parameters are randomized but reproducible via SEED.
 // ======================================================
 
 let SEED = 0;
@@ -14,29 +14,52 @@ let wheels = [];
 let beadArcs = [];
 let backgroundDots = [];
 
+// Horizontal scroll speed (pixels per second)
+const SCROLL_SPEED = 30; // fairly slow
+
 function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(HSB, 360, 100, 100);
   noStroke();
   regenerate(false);
 
-  // We KEEP the animation loop so noise-based motion can update every frame
-  frameRate(60); // 60 FPS; we control speed via noise frequency
+  // Keep animation loop
+  frameRate(60);
 }
 
 function draw() {
+  // Real time in seconds
+  const timeSec = millis() * 0.001;
+
+  // Slower animation time (10% of original speed)
+  const animTime = timeSec * 0.1;
+
+  // Horizontal scroll offset
+  const scroll = (timeSec * SCROLL_SPEED) % width;
+
   background(200, 40, 20); // Deep teal background
 
-  const t = millis() * 0.001; // Time in seconds for smooth animation
+  push();
+  // Draw first scene shifted left
+  translate(-scroll, 0);
+  drawScene(animTime);
 
-  // Draw background dot texture (static)
-  DotSystem.drawBackgroundDots(backgroundDots);
+  // Draw second copy to the right, to create endless scrolling
+  translate(width, 0);
+  drawScene(animTime);
+  pop();
+}
 
-  // Draw bead arcs linking wheels (static)
+// Draw one full scene at the current origin
+function drawScene(animTime) {
+  // Background dots (with noise-based drifting)
+  DotSystem.drawBackgroundDots(backgroundDots, animTime);
+
+  // Static bead arcs
   for (const arc of beadArcs) arc.display();
 
-  // Draw animated wheels (scale + rotation driven by Perlin noise)
-  for (const w of wheels) w.display(t);
+  // Animated wheels (scale + rotation)
+  for (const w of wheels) w.display(animTime);
 }
 
 function keyPressed() {
@@ -72,7 +95,6 @@ function regenerate(keepSameSeed = false) {
 
 // ======================================================
 // Part 1. PaletteSystem — Color control
-// Provides color picking and slight variations
 // ======================================================
 
 const PaletteSystem = {
@@ -99,6 +121,7 @@ const PaletteSystem = {
 
 // ======================================================
 // Part 2. DotSystem — Dot generation (background & ring dots)
+//      + Perlin-noise-based drifting for background dots
 // ======================================================
 
 const DotSystem = {
@@ -147,18 +170,27 @@ const DotSystem = {
           x: px,
           y: py,
           r: random(step * 0.06, step * 0.12),
-          c: random(paletteBG)
+          c: random(paletteBG),
+          // Perlin noise seeds for drifting
+          nx: random(1000),
+          ny: random(1000),
+          moveAmp: random(2, 5) // max drifting distance in pixels
         });
       }
     }
     return dots;
   },
 
-  // Draw scattered background dots
-  drawBackgroundDots(dots) {
+  // Draw scattered background dots with noise-based drifting
+  drawBackgroundDots(dots, animTime) {
+    const freq = 0.2; // drift frequency (cycles per second, quite slow)
+
     for (const d of dots) {
+      const dx = map(noise(d.nx, animTime * freq), 0, 1, -d.moveAmp, d.moveAmp);
+      const dy = map(noise(d.ny, animTime * freq), 0, 1, -d.moveAmp, d.moveAmp);
+
       fill(d.c);
-      ellipse(d.x, d.y, d.r * 2);
+      ellipse(d.x + dx, d.y + dy, d.r * 2);
     }
   }
 };
@@ -207,38 +239,39 @@ class Wheel {
     // Animation parameters (Perlin noise + randomness)
     // ---------------------------------------------
     // Scale: each wheel has its own noise seed, frequency and range.
-    // Range: roughly between ~0.3x and ~2.0x,
-    // with slow changes (well under ~10% per second).
+    // Range: roughly between ~0.3x and up to ~2x or more,
+    // changing slowly because animTime is already slowed down.
     this.scaleNoiseSeed = random(1000);
-    this.scaleFreq      = random(0.005, 0.015);   // cycles per second (very slow)
+    this.scaleFreq      = random(0.005, 0.015);   // cycles per second (on animTime)
+
     this.minScale       = random(0.3, 0.7);
-    this.maxScale       = this.minScale + random(0.8, 1.2); // big possible difference
+    this.maxScale       = this.minScale + random(0.8, 1.2); // large possible difference
 
     // Rotation: each wheel has its own noise seed, frequency and angle range.
-    // Rotation changes slowly, well under 10 degrees per second.
+    // animTime is 0.1x of real time, so the effective angular speed is well under 10 deg/s.
     this.rotNoiseSeed   = random(2000, 3000);
-    this.rotFreq        = random(0.005, 0.015);  // cycles per second
+    this.rotFreq        = random(0.005, 0.015);  // cycles per second (on animTime)
     this.rotRangeDeg    = random(20, 60);        // max +/- degrees from center
   }
 
   // Compute current scale factor from Perlin noise
-  getScale(t) {
-    const n = noise(this.scaleNoiseSeed, t * this.scaleFreq); // 0..1
+  getScale(animTime) {
+    const n = noise(this.scaleNoiseSeed, animTime * this.scaleFreq); // 0..1
     return map(n, 0, 1, this.minScale, this.maxScale);
   }
 
   // Compute current rotation angle from Perlin noise (degrees)
-  getRotationDeg(t) {
-    const n = noise(this.rotNoiseSeed, t * this.rotFreq); // 0..1
+  getRotationDeg(animTime) {
+    const n = noise(this.rotNoiseSeed, animTime * this.rotFreq); // 0..1
     return map(n, 0, 1, -this.rotRangeDeg, this.rotRangeDeg);
   }
 
-  display(t) {
+  display(animTime) {
     push();
     translate(this.x, this.y);
 
-    const s = this.getScale(t);
-    const rotDeg = this.getRotationDeg(t);
+    const s = this.getScale(animTime);
+    const rotDeg = this.getRotationDeg(animTime);
 
     // Apply rotation then uniform scaling around the wheel center
     rotate(radians(rotDeg));
@@ -381,7 +414,7 @@ class BeadArc {
       ellipse(p.x, p.y, this.beadSize);
     }
   }
-}
+};
 
 
 // ======================================================
