@@ -32,7 +32,7 @@ function draw() {
   const timeSec = millis() * 0.001;
 
   // Slower animation time (10% of original speed)
-  const animTime = timeSec * 0.1;
+  const animTime = timeSec * 0.05;
 
   // Horizontal scroll offset
   const scroll = (timeSec * SCROLL_SPEED) % width;
@@ -42,7 +42,7 @@ function draw() {
   push();
   // Draw first scene shifted left
   translate(-scroll, 0);
-  drawScene(animTime);
+  drawScene();
 
   // Draw second copy to the right, to create endless scrolling
   translate(width, 0);
@@ -102,19 +102,21 @@ const PaletteSystem = {
     [340, 90, 100], // Magenta
     [25,  95, 100], // Orange
     [55,  90, 100], // Yellow
-    [200, 60,  90], // Cyan-blue
+    [200, 60,  90], // Blue
     [120, 70,  90], // Green
-    [0,   0, 100],  // White
-    [0,   0,  15]   // Black
+    [0,   0, 100],  // W
+    [0,   0,  15]   // B
   ],
 
   pick() {
-    // Select a base color and add small random variations
+   
     const p = this.basePalette[int(random(this.basePalette.length))];
     let h = (p[0] + random(-8, 8) + 360) % 360;
     let s = constrain(p[1] + random(-6, 6), 50, 100);
     let b = constrain(p[2] + random(-6, 6), 40, 100);
     return color(h, s, b);
+
+
   }
 };
 
@@ -127,7 +129,7 @@ const PaletteSystem = {
 const DotSystem = {
   // Generate dots for wheel rings
   makeRingDots(rad) {
-    const count = int(map(rad, 20, 220, 16, 32)); // Reduced density
+    const count = int(map(rad, 20, 220, 16, 32)); 
     const dotR  = rad * 0.10;
     const dots = [];
     for (let k = 0; k < count; k++) {
@@ -141,18 +143,18 @@ const DotSystem = {
   // Generate background scattered dots (outside wheels only)
   generateBackgroundDots(wheels) {
     const dots = [];
-    const step = min(width, height) / 28; // Fewer sample points
+    const step = min(width, height) / 28; 
 
     const paletteBG = [
-      color(0, 0, 100),   // White
-      color(0, 0, 15),    // Black
+      color(0, 0, 100),   // W
+      color(0, 0, 15),    // B
       color(25, 95, 100), // Orange
       color(340, 90, 100) // Magenta
     ];
 
     for (let y = step * 0.5; y < height; y += step) {
       for (let x = step * 0.5; x < width; x += step) {
-        if (random() >= 0.6) continue; // Lower density
+        if (random() >= 0.8) continue; 
         const px = x + random(-step * 0.3, step * 0.3);
         const py = y + random(-step * 0.3, step * 0.3);
 
@@ -174,7 +176,7 @@ const DotSystem = {
           // Perlin noise seeds for drifting
           nx: random(1000),
           ny: random(1000),
-          moveAmp: random(2, 5) // max drifting distance in pixels
+          moveAmp: random(0.5,12) // max drifting distance in pixels
         });
       }
     }
@@ -183,7 +185,7 @@ const DotSystem = {
 
   // Draw scattered background dots with noise-based drifting
   drawBackgroundDots(dots, animTime) {
-    const freq = 0.2; // drift frequency (cycles per second, quite slow)
+    const freq = 0.6; // drift frequency (cycles per second, quite slow)
 
     for (const d of dots) {
       const dx = map(noise(d.nx, animTime * freq), 0, 1, -d.moveAmp, d.moveAmp);
@@ -207,7 +209,8 @@ class Wheel {
     this.y = y;
     this.baseR = baseR;
 
-    // Core & bead colors
+
+
     this.coreCol = PaletteSystem.pick();
     this.beadColor = PaletteSystem.pick();
 
